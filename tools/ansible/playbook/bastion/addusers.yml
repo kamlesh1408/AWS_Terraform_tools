@@ -1,0 +1,37 @@
+---
+- name: "Playbook to Create User and  Add Key to EC2 Instance"
+  hosts: bastion
+  remote_user: ec2-user
+  become: true
+  tasks:
+
+  - name : "Create Groups"
+    group:
+      name: "{{ item }}"
+      state: "present"
+    with_items: "{{ users }}"
+
+  - name : "Create a user"
+    user:
+        name: "{{ item }}"
+        create_home: yes
+        group: "{{ item }}"
+        state: present
+        ssh_key_file: .ssh/id_rsa
+        ssh_key_type: rsa
+    with_items: "{{ users }}"
+
+  - name: "Copy the authorized key file from"
+    authorized_key:
+      user: "{{ item }}"
+      state: "present"
+      key: "{{ lookup('file', '/tmp/users/playbooks/ssh/'+item+'.pub')}}"
+    with_items: "{{ users }}"
+
+  - name: "set {{ item }} group as sudoer without password"
+    lineinfile:
+      dest: /etc/sudoers
+      state: present
+      regexp: '^%{{ item }}'
+      line: '%{{ item }} ALL=(ALL) NOPASSWD: ALL'
+    with_items: "{{ users }}"

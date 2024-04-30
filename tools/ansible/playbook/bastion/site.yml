@@ -1,0 +1,93 @@
+- hosts: bastion
+  remote_user: ec2-user
+  become: yes
+  become_method: sudo
+
+  roles:
+    - role: python
+      tags: ["never","metamorph","vnext"]
+    - role: docker
+      tags: ["never","metamorph", "vnext"]
+    - role: metamorph
+      tags: ["never", "metamorph"]
+    - role: utils
+      tags: ["never", "metamorph", "vnext"]
+    
+    
+  tasks:
+    - name: reset ssh connection
+      meta: reset_connection
+      tags: ["never", "metamorph", "vnext"]
+
+    - name: Install k8s certified plugin
+      become: no
+      shell: /usr/local/bin/metamorph installpg k8s:certified 1.1rc98 
+      tags: ["never", "metamorph"]
+    - name: script1
+      become: no 
+      tags: ["never", "metamorph", "vnext"]
+      shell: |
+        rm ~/.aws/credentials
+        instance_id=`curl -s {{aws_meta_ec2_id_url}}`
+        cluster_quotes=`aws ec2 describe-tags --filters "Name=resource-id,Values=$instance_id" "Name=key,Values=Cluster" --region {{bastion_region}} | jq .Tags[0].Value`
+        cluster=`sed -e 's/^"//' -e 's/"$//' <<<"$cluster_quotes"`
+        json_str=`aws secretsmanager get-secret-value --secret-id $cluster --region {{bastion_region}} | jq .SecretString`
+        access_key=`echo $json_str | sed -e 's/\\\"/\"/g' -e 's/^.//g' -e 's/.$//g' | jq .access_key`
+        access_secret=`echo $json_str | sed -e 's/\\\"/\"/g' -e 's/^.//g' -e 's/.$//g' | jq .secret_key`
+        ssh_key_str=`aws secretsmanager get-secret-value --secret-id git_ssh_key --region {{bastion_region}} | jq .SecretString`
+        ssh_key_quote=`echo $ssh_key_str | sed -e 's/\\\"/\"/g' -e 's/^.//g' -e 's/.$//g' | jq .id_ed25519`
+        ssh_key=`echo $ssh_key_quote | sed 's/"//g' | sed 's/ /\n/g'`
+        echo "-----BEGIN OPENSSH PRIVATE KEY-----" >> ~/.ssh/id_ed25519
+        echo "$ssh_key" >> ~/.ssh/id_ed25519
+        echo "-----END OPENSSH PRIVATE KEY-----" >> ~/.ssh/id_ed25519
+        chmod 400 ~/.ssh/id_ed25519
+        eval `ssh-agent -s`
+        ssh-add ~/.ssh/id_ed25519
+        ssh-keyscan {{git_domain}} >> ~/.ssh/known_hosts
+    - name: script2
+      tags: ["never", "metamorph"]
+      become: no 
+      shell: |
+        cd ~
+        git clone {{CSRE_repo}}
+        cp ~/CSRE/configs/prod_edr/$cluster/kernel.bind.k8s-certified.$cluster.cfg /tmp/kernel.bind.k8s-certified.$cluster.cfg
+        rm -rf ~/CSRE
+        metamorphctl shellinit --bind /tmp/kernel.bind.k8s-certified.$cluster.cfg --key $access_key --secret $access_secret
+    - name: script3
+      tags: ["never", "vnext"]
+      become: yes 
+      shell: |
+        cd ~
+        curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp
+        sudo mv /tmp/eksctl /usr/local/bin
+        curl --silent --location "https://releases.hashicorp.com/terraform/1.1.9/terraform_1.1.9_linux_amd64.zip" -o /tmp/terraform_1.1.9_linux_amd64.zip
+        unzip /tmp/terraform_1.1.9_linux_amd64.zip -d /tmp
+        sudo mv /tmp/terraform /usr/local/bin
+        curl --silent --location https://get.helm.sh/helm-v3.8.2-linux-amd64.tar.gz | tar xz -C /tmp
+        sudo cp /tmp/linux-amd64/helm /usr/local/bin/helm3
+        sudo cp /tmp/linux-amd64/helm /usr/local/bin/helm
+        sudo pip3 install yq
+        curl -o aws-iam-authenticator https://s3.us-west-2.amazonaws.com/amazon-eks/1.21.2/2021-07-05/bin/linux/amd64/aws-iam-authenticator
+        chmod +x aws-iam-authenticator
+        sudo cp aws-iam-authenticator /usr/local/bin
+        curl -LO "https://dl.k8s.io/release/v1.21.0/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo cp kubectl /usr/local/bin
+        curl --silent --location "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.5.2/kustomize_v4.5.2_linux_amd64.tar.gz" | tar xz -C /tmp
+        sudo mv /tmp/kustomize /usr/local/bin
+        sudo curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        sudo chmod +x /usr/local/bin/argocd
+
+    - name: script4
+      tags: ["never", "vnext"]
+      become: no 
+      shell: |
+        instance_id=`curl -s {{aws_meta_ec2_id_url}}`
+        cluster_quotes=`aws ec2 describe-tags --filters "Name=resource-id,Values=$instance_id" "Name=key,Values=Cluster" --region {{bastion_region}} | jq .Tags[0].Value`
+        cluster=`sed -e 's/^"//' -e 's/"$//' <<<"$cluster_quotes"`
+        json_str=`aws secretsmanager get-secret-value --secret-id $cluster --region {{bastion_region}} | jq -r .SecretString`
+        access_key=`echo $json_str | jq -r .access_key`
+        access_secret=`echo $json_str | jq -r .secret_key`
+        aws configure set default.region us-west-2
+        aws configure set aws_access_key_id $access_key
+        aws configure set aws_secret_access_key $access_secret

@@ -1,0 +1,14 @@
+- name: generate SSH key
+  hosts: 127.0.0.1
+  connection: local
+  vars:
+    ssh_key_filename: id_rsa_myproject
+  tasks:
+    - name: generate SSH key {{item}}
+      openssh_keypair:
+        path: "{{ keypair_path }}/{{ item }}"
+        type: rsa
+        size: 4096
+        state: present
+        force: no
+      with_items: "{{ users }}"

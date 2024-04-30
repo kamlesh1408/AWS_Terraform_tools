@@ -1,0 +1,58 @@
+---
+# This role deploys metamorph and dependenies.
+- name: Install httpd-tools
+  yum:
+    name: httpd-tools
+    state: latest
+
+- name: Install lynx
+  yum:
+    name: lynx
+    state: latest
+
+- name: Install xdg-utils 
+  yum:
+    name: xdg-utils
+    state: latest
+        
+- name: Install gcc 
+  yum:
+    name: gcc
+    state: latest
+    
+- name: Install jq 
+  yum:
+    name: jq
+    state: latest
+        
+- name: Download metamorph-linux
+  shell: aws s3 cp {{metamorph_linux_s3}} /tmp/metamorph-linux
+
+- name: Copy metamorph to bin folder
+  shell: cp /tmp/metamorph-linux /usr/local/bin/metamorph
+
+- name: Change metamorph to executable
+  ansible.builtin.file:
+    path: /usr/local/bin/metamorph
+    state: file
+    mode: '0755'
+
+- name: Download metamorph composer 
+  get_url:
+    url: "{{metamorph_composer_url}}"
+    dest: /tmp
+
+- name: Install metamorph composer
+  shell: pip3 install /tmp/{{metamorph_composer}}
+
+- name: Download metamorphctl
+  shell: aws s3 cp {{metamorphctl_s3}} /tmp/metamorphctl
+
+- name: Copy metamorphctl to bin folder
+  shell: cp /tmp/metamorphctl /bin/
+  
+- name: Change metamorphctl file permission
+  ansible.builtin.file:
+    path: /bin/metamorphctl
+    state: file
+    mode: '0755'

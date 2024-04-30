@@ -1,0 +1,17 @@
+---
+# This role deploys docker.
+- name: Install docker
+  yum:
+    name: docker
+    state: latest
+
+- name: Ensure docker is part of ec2-user's groups
+  shell: usermod -a -G docker ec2-user
+
+- name: Enable Docker CE service at startup
+  service:
+    name: docker
+    state: started
+    enabled: yes
+    
+ 

@@ -1,0 +1,25 @@
+all:
+  children:
+    bastion:
+      children:
+        preprod:
+          hosts:
+            10.109.100.121
+        edrusw:
+          hosts:
+            10.109.100.162
+        edreuc:
+          hosts:
+            10.109.100.242
+        edruse:
+          hosts:
+            10.109.100.206
+        edrcac:
+          hosts:
+            10.109.100.237
+        edraps:
+          hosts:
+            10.109.100.113
+    mar_bastion:
+      hosts:
+        10.109.100.38
